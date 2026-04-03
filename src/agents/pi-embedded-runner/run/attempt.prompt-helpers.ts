@@ -12,6 +12,7 @@ import { buildEmbeddedCompactionRuntimeContext } from "../compaction-runtime-con
 import { log } from "../logger.js";
 import { shouldInjectHeartbeatPromptForTrigger } from "./trigger-policy.js";
 import type { EmbeddedRunAttemptParams } from "./types.js";
+import type { PromptMode } from "../../system-prompt.js";
 
 export type PromptBuildHookRunner = {
   hasHooks: (hookName: "before_prompt_build" | "before_agent_start") => boolean;
@@ -81,7 +82,13 @@ export async function resolvePromptBuildHookResult(params: {
   };
 }
 
-export function resolvePromptModeForSession(sessionKey?: string): "minimal" | "full" {
+export function resolvePromptModeForSession(
+  sessionKey: string | undefined,
+  isFirstTurn?: boolean,
+): PromptMode {
+  if (isFirstTurn) {
+    return "first-turn";
+  }
   if (!sessionKey) {
     return "full";
   }

@@ -433,6 +433,13 @@ export async function runEmbeddedAttempt(
     let abortSessionForYield: (() => void) | null = null;
     let queueYieldInterruptForSession: (() => void) | null = null;
     let yieldAbortSettled: Promise<void> | null = null;
+    // Check if the session is new (first turn) to apply token optimizations.
+    const hadSessionFile = await fs
+      .stat(params.sessionFile)
+      .then(() => true)
+      .catch(() => false);
+    const isFirstTurn = !hadSessionFile;
+
     // Check if the model supports native image input
     const modelHasVision = params.model.input?.includes("image") ?? false;
     const toolsRaw = params.disableTools
@@ -496,6 +503,7 @@ export async function runEmbeddedAttempt(
               runAbortController.abort("sessions_yield");
               abortSessionForYield?.();
             },
+            pruneForFirstTurn: isFirstTurn,
           });
           if (params.toolsAllow && params.toolsAllow.length > 0) {
             const allowSet = new Set(params.toolsAllow);
@@ -660,7 +668,7 @@ export async function runEmbeddedAttempt(
       },
     });
     const isDefaultAgent = sessionAgentId === defaultAgentId;
-    const promptMode = resolvePromptModeForSession(params.sessionKey);
+    const promptMode = resolvePromptModeForSession(params.sessionKey, isFirstTurn);
 
     // When toolsAllow is set, use minimal prompt and strip skills catalog
     const effectivePromptMode = params.toolsAllow?.length ? ("minimal" as const) : promptMode;
@@ -757,10 +765,6 @@ export async function runEmbeddedAttempt(
         sessionFile: params.sessionFile,
         warn: (message) => log.warn(message),
       });
-      const hadSessionFile = await fs
-        .stat(params.sessionFile)
-        .then(() => true)
-        .catch(() => false);
 
       const transcriptPolicy = resolveTranscriptPolicy({
         modelApi: params.model?.api,

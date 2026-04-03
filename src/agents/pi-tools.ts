@@ -70,6 +70,18 @@ const TOOL_DENY_BY_MESSAGE_PROVIDER: Readonly<Record<string, readonly string[]>>
 const TOOL_ALLOW_BY_MESSAGE_PROVIDER: Readonly<Record<string, readonly string[]>> = {
   node: ["canvas", "image", "pdf", "tts", "web_fetch", "web_search"],
 };
+const FIRST_TURN_TOOL_ALLOWLIST = new Set([
+  "read",
+  "ls",
+  "grep",
+  "find",
+  "message",
+  "session_status",
+  "subagents",
+  "sessions_list",
+  "sessions_history",
+  "sessions_send",
+]);
 const MEMORY_FLUSH_ALLOWED_TOOL_NAMES = new Set(["read", "write"]);
 
 function normalizeMessageProvider(messageProvider?: string): string | undefined {
@@ -96,6 +108,10 @@ function applyMessageProviderToolPolicy(
   }
   const deniedSet = new Set(deniedTools);
   return tools.filter((tool) => !deniedSet.has(tool.name));
+}
+
+function pruneToolsForFirstTurn(tools: AnyAgentTool[]): AnyAgentTool[] {
+  return tools.filter((tool) => FIRST_TURN_TOOL_ALLOWLIST.has(tool.name));
 }
 
 function applyModelProviderToolPolicy(
@@ -297,6 +313,8 @@ export function createOpenClawCodingTools(options?: {
   senderIsOwner?: boolean;
   /** Callback invoked when sessions_yield tool is called. */
   onYield?: (message: string) => Promise<void> | void;
+  /** If true, return only a minimal toolset optimized for the first turn. */
+  pruneForFirstTurn?: boolean;
 }): AnyAgentTool[] {
   const execToolName = "exec";
   const sandbox = options?.sandbox?.enabled ? options.sandbox : undefined;
@@ -658,5 +676,9 @@ export function createOpenClawCodingTools(options?: {
   // NOTE: Keep canonical (lowercase) tool names here.
   // pi-ai's Anthropic OAuth transport remaps tool names to Claude Code-style names
   // on the wire and maps them back for tool dispatch.
-  return withAbort;
+  const finalTools = withAbort;
+  if (options?.pruneForFirstTurn) {
+    return pruneToolsForFirstTurn(finalTools);
+  }
+  return finalTools;
 }
